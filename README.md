@@ -1,2 +1,4 @@
 # hello-world
-setting up git
+Hi GitHub'ers!
+
+Setting up scala on my linux box
