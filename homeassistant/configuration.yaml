@@ -1,0 +1,84 @@
+default_config:
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+
+automation: !include automations.yaml
+script: !include_dir_merge_named scripts
+scene: !include scenes.yaml
+
+input_number:
+  pool_billige_timer:
+    name: "Antal billige timer poolen skal varme"
+    min: 1
+    max: 8
+    step: 1
+    initial: 5
+    icon: mdi:counter
+
+  pool_vindue_start:
+    name: "Starttime for varmevindue"
+    min: 0
+    max: 23
+    step: 1
+    initial: 10
+    icon: mdi:clock-start
+
+  pool_vindue_slut:
+    name: "Sluttime for varmevindue (eksklusiv - 17 = sidste time er 16-17)"
+    min: 1
+    max: 24
+    step: 1
+    initial: 17
+    icon: mdi:clock-end
+
+input_boolean:
+  pool_automation_aktiv:
+    name: "Pool-automatisering aktiv"
+    icon: mdi:toggle-switch
+
+template:
+  - binary_sensor:
+      - name: "Pool skal varme nu"
+        unique_id: pool_skal_varme_nu
+        icon: mdi:pool-thermometer
+        state: >
+          {% set window_start = states('input_number.pool_vindue_start') | int(10) %}
+          {% set window_end = states('input_number.pool_vindue_slut') | int(17) %}
+          {% set cheap_count = states('input_number.pool_billige_timer') | int(5) %}
+          {% set automation_on = is_state('input_boolean.pool_automation_aktiv', 'on') %}
+          {% set prices = state_attr('sensor.energi_data_service', 'raw_today') %}
+
+          {% if not automation_on or prices is none %}
+            false
+          {% else %}
+            {% set window_prices = prices
+              | selectattr('hour', 'ge', window_start)
+              | selectattr('hour', 'lt', window_end)
+              | list %}
+            {% set sorted_prices = window_prices
+              | sort(attribute='price')
+              | map(attribute='hour')
+              | list %}
+            {% set cheapest = sorted_prices[:cheap_count] %}
+            {% set current_hour = now().hour %}
+            {{ current_hour in cheapest }}
+          {% endif %}
+        attributes:
+          billigste_timer: >
+            {% set window_start = states('input_number.pool_vindue_start') | int(10) %}
+            {% set window_end = states('input_number.pool_vindue_slut') | int(17) %}
+            {% set cheap_count = states('input_number.pool_billige_timer') | int(5) %}
+            {% set prices = state_attr('sensor.energi_data_service', 'raw_today') %}
+            {% if prices is none %}
+              []
+            {% else %}
+              {% set window_prices = prices
+                | selectattr('hour', 'ge', window_start)
+                | selectattr('hour', 'lt', window_end)
+                | list %}
+              {% set sorted_hours = window_prices | sort(attribute='price') | map(attribute='hour') | list %}
+              {{ sorted_hours[:cheap_count] | sort }}
+            {% endif %}

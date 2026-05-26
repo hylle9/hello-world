@@ -1,0 +1,51 @@
+- id: pool_varme_taend
+  alias: "Pool: Tænd varme i billig time"
+  description: "Lukker Shelly-relæet når den aktuelle time er en af de billigste i varmevinduet"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.pool_skal_varme_nu
+      to: "on"
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.shelly_pool_aux
+    - service: notify.mobile_app_din_iphone
+      data:
+        title: "Pool-varme TÆNDT"
+        message: >
+          Strømmen er billig nu ({{ state_attr('sensor.energi_data_service', 'current_price') | round(2) }} kr/kWh).
+          Varmer indtil næste pristjek.
+
+- id: pool_varme_sluk
+  alias: "Pool: Sluk varme udenfor billig time"
+  description: "Bryder Shelly-relæet når den aktuelle time ikke længere er blandt de billigste"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.pool_skal_varme_nu
+      to: "off"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.shelly_pool_aux
+    - service: notify.mobile_app_din_iphone
+      data:
+        title: "Pool-varme SLUKKET"
+        message: "Den billige periode er slut for nu."
+
+- id: pool_morgenrapport
+  alias: "Pool: Morgenrapport om dagens plan"
+  description: "Sender notifikation kl. 07:00 med dagens plan for pool-opvarmning"
+  mode: single
+  trigger:
+    - platform: time
+      at: "07:00:00"
+  action:
+    - service: notify.mobile_app_din_iphone
+      data:
+        title: "Pool-plan for i dag"
+        message: >
+          Varmer i de billigste {{ states('input_number.pool_billige_timer') }} timer mellem
+          kl. {{ states('input_number.pool_vindue_start') }}-{{ states('input_number.pool_vindue_slut') }}.
+          Billigste timer i dag: {{ state_attr('binary_sensor.pool_skal_varme_nu', 'billigste_timer') }}.
