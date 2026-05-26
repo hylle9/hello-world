@@ -2,7 +2,13 @@
 
 Komplet setup til at styre din Duratech Dura+ 28Ti via IntelliPool's AUX-indgang og en Shelly, baseret på spotpriser fra Andel/Nord Pool. Designet til at køre på en **Mac mini** med Docker.
 
-**Hvad systemet gør:** Henter spotpriser fra Energi Data Service hver time, lægger Cerius nettarif, elafgift og moms ovenpå, finder de N billigste timer i dit ønskede tidsvindue (default 10-17, undgår spidslast 17-21), og lukker/åbner Shelly-relæet derefter. Shelly trigger AUX-indgangen på IntelliPool, som så styrer varmepumpen blødt og sikkert.
+**Hvad systemet gør:** Henter spotpriser fra Energi Data Service hver time, lægger Cerius nettarif, elafgift og moms ovenpå, og styrer Shelly-relæet efter en **termisk batteri-model**:
+
+- **Under gulv-temp** (default 24°C): Varm uanset pris (sikkerhed/komfort)
+- **Over loft-temp** (default 32°C): Sluk altid (batteri fuldt)
+- **Mellem gulv og loft**: Varm kun i de N billigste timer i dit vindue (default 10-17, undgår spidslast 17-21)
+
+Shelly trigger AUX-indgangen på IntelliPool, som så styrer varmepumpen blødt og sikkert. Idéen er at "oplade" poolens varme i de billige dagtimer (måske helt op til 30-32°C) så den kan "aflades" naturligt om natten/aftenen uden at varmepumpen behøver køre i dyre timer.
 
 ---
 
@@ -282,12 +288,19 @@ Eller i UI: **Indstillinger** → **System** → **Logs**.
 
 ## 10. Justering og fejlfinding
 
-### 10.1 Justér antal timer der varmes
+### 10.1 Justér automatiseringen
 
 I HA: **Indstillinger** → **Enheder og tjenester** → **Hjælpere**, find:
+
+**Pris/tids-relaterede:**
 - `Antal billige timer poolen skal varme` (default 5)
 - `Starttime for varmevindue` (default 10)
 - `Sluttime for varmevindue` (default 17, eksklusiv - betyder sidste time er 16-17)
+
+**Temperatur-relaterede (kun aktive når `sensor.pool_water_temp` findes):**
+- `Gulv-temperatur` (default 24°C) - varm altid hvis vandet falder under
+- `Mål-temperatur` (default 27°C) - kun til notifikationer/statistik
+- `Loft-temperatur` (default 32°C) - sluk altid hvis vandet er over
 
 Ændringer træder i kraft øjeblikkeligt.
 
@@ -331,6 +344,14 @@ ADVARSEL: Det sletter al din historik og konfiguration. Filerne `configuration.y
 Næste skridt vi skal aftale separat:
 
 1. **AUX-indgangen på IntelliPool**: Find frem til den manual-side du nævnte, og afgør præcis hvordan vi kabler Shelly'en til at trigge det rigtige scenarie
-2. **Tilpas tidsvindue**: 10-17 er sikkert for Cerius (undgår spidslast 17-21), men i højsommer hvor solen står højt 10-15 kunne det være endnu bedre
-3. **Tilføj poolens vandtemperatur-sensor** så systemet kan stoppe når vandet er varmt nok (kræver enten en Shelly Plus Add-on med temperatursensor eller en MQTT-bro til IntelliPool)
-4. **Dashboard på iPhone**: Sæt et flot dashboard op med pris-graf, dagens plan, manuel override-knap mv.
+2. **Få vandtemperaturen ind i HA** som `sensor.pool_water_temp`. Tre veje:
+   - **A) Modbus TCP** hvis dit IntelliPool E-Box har Modbus-modulet (officiel, rent)
+   - **B) Parallel DS18B20-probe** via en Shelly Plus 1 + Add-On (~400-500 kr, helt uafhængig)
+   - **C) AUX-zones hack** - IntelliPool's AUX-udgange programmeres til at lukke ved bestemte temp-tærskler, læses som Shelly-inputs
+3. **Tilpas tidsvindue**: 10-17 er sikkert for Cerius (undgår spidslast 17-21), men i højsommer hvor solen står højt 10-15 kunne være endnu bedre
+4. **Vejrudsigt-baseret sizing**: Næste version kan bruge DMI-vejrudsigten + poolens m² overflade til at beregne forventet varmetab og dimensionere antal timer dynamisk
+5. **Dashboard på iPhone**: Sæt et flot dashboard op med pris-graf, vandtemperatur, dagens plan, manuel override-knap mv.
+
+### Hvad sker der hvis `sensor.pool_water_temp` ikke findes?
+
+Systemet falder tilbage til **kun pris-styret drift** - varmer i de billigste timer i vinduet, uden gulv/loft-grænser. Du kan trygt starte uden temp-sensor og tilføje den senere.

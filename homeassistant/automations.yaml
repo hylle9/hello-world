@@ -49,3 +49,21 @@
           Varmer i de billigste {{ states('input_number.pool_billige_timer') }} timer mellem
           kl. {{ states('input_number.pool_vindue_start') }}-{{ states('input_number.pool_vindue_slut') }}.
           Billigste timer i dag: {{ state_attr('binary_sensor.pool_skal_varme_nu', 'billigste_timer') }}.
+          Aktuel pool-temp: {{ states('sensor.pool_water_temp') }}°C.
+
+- id: pool_advarsel_gulv_naaet
+  alias: "Pool: Advarsel hvis gulv-temperatur er nået i dyr time"
+  description: "Hvis vandet falder under gulv-temp tvinges varmen på, men det er dyrt - giv besked"
+  mode: single
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.pool_water_temp
+      below: input_number.pool_temp_gulv
+  action:
+    - service: notify.mobile_app_din_iphone
+      data:
+        title: "Pool: gulv-temp nået - tvunget opvarmning"
+        message: >
+          Vandet er nu {{ states('sensor.pool_water_temp') }}°C - under dit gulv
+          på {{ states('input_number.pool_temp_gulv') }}°C. Varmer uanset spotpris
+          ({{ state_attr('sensor.energi_data_service', 'current_price') | round(2) }} kr/kWh).

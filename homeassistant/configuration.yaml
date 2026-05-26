@@ -34,6 +34,33 @@ input_number:
     initial: 17
     icon: mdi:clock-end
 
+  pool_temp_gulv:
+    name: "Gulv-temperatur (varm altid hvis under)"
+    min: 18
+    max: 28
+    step: 0.5
+    initial: 24
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-low
+
+  pool_temp_maal:
+    name: "Mål-temperatur (gennemsnit)"
+    min: 20
+    max: 32
+    step: 0.5
+    initial: 27
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+
+  pool_temp_loft:
+    name: "Loft-temperatur (sluk altid hvis over)"
+    min: 24
+    max: 36
+    step: 0.5
+    initial: 32
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-high
+
 input_boolean:
   pool_automation_aktiv:
     name: "Pool-automatisering aktiv"
@@ -45,13 +72,22 @@ template:
         unique_id: pool_skal_varme_nu
         icon: mdi:pool-thermometer
         state: >
+          {% set automation_on = is_state('input_boolean.pool_automation_aktiv', 'on') %}
+          {% set temp = states('sensor.pool_water_temp') | float(none) %}
+          {% set gulv = states('input_number.pool_temp_gulv') | float(24) %}
+          {% set loft = states('input_number.pool_temp_loft') | float(32) %}
           {% set window_start = states('input_number.pool_vindue_start') | int(10) %}
           {% set window_end = states('input_number.pool_vindue_slut') | int(17) %}
           {% set cheap_count = states('input_number.pool_billige_timer') | int(5) %}
-          {% set automation_on = is_state('input_boolean.pool_automation_aktiv', 'on') %}
           {% set prices = state_attr('sensor.energi_data_service', 'raw_today') %}
 
-          {% if not automation_on or prices is none %}
+          {% if not automation_on %}
+            false
+          {% elif temp is not none and temp >= loft %}
+            false
+          {% elif temp is not none and temp < gulv %}
+            true
+          {% elif prices is none %}
             false
           {% else %}
             {% set window_prices = prices
@@ -67,6 +103,22 @@ template:
             {{ current_hour in cheapest }}
           {% endif %}
         attributes:
+          aarsag: >
+            {% set automation_on = is_state('input_boolean.pool_automation_aktiv', 'on') %}
+            {% set temp = states('sensor.pool_water_temp') | float(none) %}
+            {% set gulv = states('input_number.pool_temp_gulv') | float(24) %}
+            {% set loft = states('input_number.pool_temp_loft') | float(32) %}
+            {% if not automation_on %}
+              Automatisering deaktiveret
+            {% elif temp is none %}
+              Ingen temp-sensor - kører på pris alene
+            {% elif temp >= loft %}
+              Loft nået ({{ temp }}°C >= {{ loft }}°C) - batteri fuldt
+            {% elif temp < gulv %}
+              Under gulv ({{ temp }}°C < {{ gulv }}°C) - varm uanset pris
+            {% else %}
+              Normal drift - varmer i billige timer
+            {% endif %}
           billigste_timer: >
             {% set window_start = states('input_number.pool_vindue_start') | int(10) %}
             {% set window_end = states('input_number.pool_vindue_slut') | int(17) %}
